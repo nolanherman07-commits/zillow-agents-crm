@@ -423,7 +423,16 @@ input.note::placeholder { color: #7f8eac; }
   var claudeReady = (window.claude && typeof window.claude.use === "function") ? window.claude.use("db") : Promise.resolve(null);
   Promise.resolve(claudeReady).then(function (ns) {
     db = ns;
-    if (!db) { setSave("View only"); notice("Statuses and notes can't be loaded or saved in this view. Open the page signed in to Claude to work your list."); return; }
+    if (!db) {
+      // Outside Claude there is no store: show the saved snapshot in state.json, read only.
+      setSave("View only");
+      fetch("state.json").then(function (r) { if (!r.ok) throw new Error("load"); return r.json(); }).then(function (snap) {
+        applyShard({ exists: true, id: "snapshot", data: function () { return snap; } });
+        notice("Showing statuses as of Nov 27, 2026. Changes can't be saved in this view. Open the page signed in to Claude to work your list.");
+        render();
+      }).catch(function () { notice("Statuses and notes can't be loaded or saved in this view. Open the page signed in to Claude to work your list."); });
+      return;
+    }
     var slow = setTimeout(function () { notice("Still reaching your saved statuses. What you see may be out of date."); }, 10000);
     db.collection("state").onSnapshot(function (snap) {
       snap.docs.forEach(applyShard);
