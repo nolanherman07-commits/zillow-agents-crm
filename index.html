@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Zillow Agents CRM</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,700&family=Public+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+/* Layout idea: one solid navy sheet. Tabs on top, then a dense spreadsheet-style table,
+   one agent per line, agent name pinned on the left while the rest scrolls sideways.
+   Single theme on purpose: solid navy and white everywhere. */
+:root {
+  --navy: #0e2244;        /* page and rows */
+  --navy-head: #0a1a36;   /* header band and masthead */
+  --navy-field: #16305c;  /* inputs, hover */
+  --line: #2a4170;
+  --white: #ffffff;
+  --soft: #c3cde0;        /* secondary text */
+  --gold: #d9b450;        /* active tab only */
+  --amber-bg: #8a5a00; --red-bg: #8f2f2a; --green-bg: #1f6b47; --blue-bg: #2a5aa8;
+  --font-display: "Bricolage Grotesque", "Trebuchet MS", system-ui, sans-serif;
+  --font-body: "Public Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { background: var(--navy); color: var(--white); font-family: var(--font-body); font-size: 14px; line-height: 1.35; }
+a { color: inherit; }
+:focus-visible { outline: 2px solid var(--white); outline-offset: 1px; }
+
+.masthead { background: var(--navy-head); border-bottom: 1px solid var(--line); position: sticky; top: 0; z-index: 6; }
+.mast-inner { padding: 12px 16px 0; display: flex; flex-direction: column; gap: 10px; }
+.mast-top { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; }
+h1 { font-family: var(--font-display); font-weight: 700; font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+.save { font-size: 13px; color: var(--soft); margin-left: auto; }
+.save[data-state="error"] { color: #ffb4ae; }
+.search { flex: 1 1 240px; max-width: 420px; display: flex; }
+.search input { width: 100%; font: inherit; padding: 7px 11px; border-radius: 6px; border: 1px solid var(--line); background: var(--navy-field); color: var(--white); }
+.search input::placeholder { color: var(--soft); }
+.tabs { display: flex; gap: 2px; overflow-x: auto; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tab { font: inherit; font-weight: 600; color: var(--soft); background: none; border: 0; border-bottom: 3px solid transparent; padding: 7px 11px 8px; cursor: pointer; white-space: nowrap; display: flex; gap: 7px; align-items: center; }
+.tab:hover { color: var(--white); }
+.tab[aria-selected="true"] { color: var(--white); border-bottom-color: var(--gold); }
+.tab .n { font-size: 12px; font-variant-numeric: tabular-nums; background: var(--navy-field); color: var(--soft); border-radius: 99px; padding: 1px 8px; }
+.tab[aria-selected="true"] .n { background: var(--white); color: var(--navy-head); }
+
+main { padding: 10px 16px 40px; display: flex; flex-direction: column; gap: 8px; }
+.notice { background: var(--amber-bg); color: var(--white); border-radius: 6px; padding: 8px 12px; }
+.notice[hidden] { display: none; }
+.summary { color: var(--soft); font-size: 13px; }
+.empty { border: 1px dashed var(--line); border-radius: 8px; padding: 26px 16px; text-align: center; color: var(--soft); }
+
+.sheet { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--navy); }
+table { border-collapse: separate; border-spacing: 0; width: 100%; min-width: 1320px; }
+th, td { padding: 5px 10px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 220px; background: var(--navy); height: 34px; }
+th { background: var(--navy-head); font-weight: 600; font-size: 12px; color: var(--soft); text-transform: uppercase; letter-spacing: 0.05em; position: sticky; top: 0; z-index: 2; }
+tr:last-child td { border-bottom: 0; }
+tbody tr:hover td { background: var(--navy-field); }
+th.pin, td.pin { position: sticky; left: 0; z-index: 3; border-right: 1px solid var(--line); max-width: 190px; }
+th.pin { z-index: 4; }
+td.pin a, td.pin span { font-weight: 600; text-decoration: underline; text-decoration-color: var(--line); text-underline-offset: 3px; }
+td.pin a:hover { text-decoration-color: var(--white); }
+td.num { text-align: right; font-variant-numeric: tabular-nums; }
+td.phone a { text-decoration: none; font-variant-numeric: tabular-nums; }
+td.phone a:hover { text-decoration: underline; }
+td.muted { color: var(--soft); }
+td.ctl { overflow: visible; }
+
+select, input[type="date"], input.note { font: inherit; color: var(--white); background: var(--navy-field); border: 1px solid var(--line); border-radius: 5px; padding: 3px 7px; height: 26px; }
+select { font-weight: 600; cursor: pointer; border-radius: 99px; padding: 2px 8px; width: 150px; }
+select[data-tone="warn"] { background: var(--amber-bg); border-color: var(--amber-bg); }
+select[data-tone="bad"] { background: var(--red-bg); border-color: var(--red-bg); }
+select[data-tone="good"] { background: var(--green-bg); border-color: var(--green-bg); }
+select[data-tone="info"] { background: var(--blue-bg); border-color: var(--blue-bg); }
+select option { background: var(--navy-head); color: var(--white); }
+input[type="date"] { width: 132px; }
+input[type="datetime-local"] { width: 196px; font: inherit; color: var(--white); background: var(--navy-field); border: 1px solid var(--line); border-radius: 5px; padding: 3px 7px; height: 26px; }
+input.note { width: 280px; background: var(--navy); border-color: transparent; }
+input.note:hover { border-color: var(--line); }
+input.note:focus { background: var(--navy-field); border-color: var(--white); }
+input.note::placeholder { color: #7f8eac; }
+.days { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.days[data-old="1"] { color: #ffc9a8; }
+.btn { font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; border-radius: 5px; padding: 3px 9px; border: 1px solid var(--white); background: var(--navy); color: var(--white); margin-left: 8px; }
+.btn:hover { background: var(--white); color: var(--navy-head); }
+.more { align-self: center; margin: 6px 0 0; padding: 7px 16px; font-size: 13px; }
+.dash { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; align-items: start; }
+.card { background: var(--navy-head); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.card h2 { font-family: var(--font-display); font-size: 16px; margin: 0; display: flex; align-items: center; gap: 8px; }
+.card h2 .n { font-family: var(--font-body); font-size: 12px; background: var(--white); color: var(--navy-head); border-radius: 99px; padding: 1px 8px; font-variant-numeric: tabular-nums; }
+.card .none { margin: 0; color: var(--soft); font-size: 13px; }
+.goal .big { font-family: var(--font-display); font-weight: 700; font-size: 52px; line-height: 1; font-variant-numeric: tabular-nums; }
+.goal .big small { font-size: 20px; font-weight: 600; color: var(--soft); }
+.bar { height: 10px; border-radius: 99px; background: var(--navy-field); overflow: hidden; }
+.fill { height: 100%; background: var(--white); border-radius: 99px; }
+.goal .btn { align-self: flex-start; font-size: 13px; padding: 5px 12px; }
+.item { display: grid; grid-template-columns: 76px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 8px 0; border-top: 1px solid var(--line); }
+.item .when { font-weight: 600; font-variant-numeric: tabular-nums; }
+.item .nm { font-weight: 600; text-underline-offset: 3px; }
+.item .sub { color: var(--soft); font-size: 13px; overflow-wrap: anywhere; }
+.item .tel { font-variant-numeric: tabular-nums; text-decoration: none; white-space: nowrap; }
+.item .tel:hover { text-decoration: underline; }
+.toast { position: fixed; left: 50%; bottom: 18px; transform: translateX(-50%); background: var(--white); color: var(--navy-head); font-weight: 600; border-radius: 99px; padding: 8px 16px; opacity: 0; pointer-events: none; transition: opacity .2s; max-width: calc(100% - 32px); text-align: center; }
+.toast[data-on="1"] { opacity: 1; }
+@media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+@media (max-width: 520px) {
+  .save { width: 100%; margin-left: 0; order: 3; }
+  th.pin, td.pin { max-width: 130px; }
+}
+</style>
+</head>
+<body>
+<header class="masthead">
+  <div class="mast-inner">
+    <div class="mast-top">
+      <h1>Zillow Agents CRM</h1>
+      <div class="search"><input id="search" type="search" placeholder="Search name, team, or market" autocomplete="off" aria-label="Search agents"></div>
+      <div class="save" id="save" role="status">Loading…</div>
+    </div>
+    <nav class="tabs" id="tabs" role="tablist" aria-label="Pipeline"></nav>
+  </div>
+</header>
+<main>
+  <div class="notice" id="notice" hidden></div>
+  <div class="summary" id="summary"></div>
+  <div id="list"></div>
+</main>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  "use strict";
+  var STATUSES = [
+    { v: "", label: "Not called yet", tone: "" },
+    { v: "No answer", label: "No answer", tone: "warn" },
+    { v: "Talked To", label: "Talked To", tone: "info" },
+    { v: "Video Call Set", label: "Video Call Set", tone: "info" },
+    { v: "Video Call Met", label: "Video Call Met", tone: "info" },
+    { v: "Closed Won", label: "Closed Won", tone: "good" },
+    { v: "Closed Lost", label: "Closed Lost", tone: "bad" },
+    { v: "Not interested", label: "Not interested", tone: "bad" },
+    { v: "Bad information", label: "Bad information", tone: "bad" }
+  ];
+  var TONE = {}; STATUSES.forEach(function (s) { TONE[s.v] = s.tone; });
+  var TABS = [
+    { id: "dashboard", label: "Dashboard", dash: true, match: function () { return false; } },
+    { id: "call-list", label: "Call List", match: function (s) { return !s; } },
+    { id: "no-answer", label: "No Answer", match: function (s) { return s === "No answer"; } },
+    { id: "talked-to", label: "Talked To", match: function (s) { return s === "Talked To"; } },
+    { id: "video-call-set", label: "Video Call Set", match: function (s) { return s === "Video Call Set"; } },
+    { id: "video-call-met", label: "Video Call Met", match: function (s) { return s === "Video Call Met"; } },
+    { id: "closed", label: "Closed", match: function (s) { return s === "Closed Won" || s === "Closed Lost"; } },
+    { id: "not-interested", label: "Not Interested", match: function (s) { return s === "Not interested" || s === "Bad information"; } }
+  ];
+  var PAGE = 100, GOAL = 50;
+
+  var agents = [];            // contact details, from agents.json
+  var state = {};             // "a<row>" -> { s, d, n }
+  var shardExists = {};       // "s<k>" -> true once the store has that document
+  var db = null, canSave = false;
+  var tab = "call-list", query = "", shown = PAGE, pendingRender = false;
+
+  var $ = function (id) { return document.getElementById(id); };
+  var el = function (tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+  function key(a) { return "a" + a.i; }
+  function shardOf(a) { return "s" + Math.floor((a.i - 2) / 100); }
+  function st(a) { return state[key(a)] || { s: "", d: "", n: "", f: "" }; }
+  function isDate(d) { return /^\d{4}-\d{2}-\d{2}$/.test(d || ""); }
+  function today() { var d = new Date(); return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function daysSince(iso) {
+    if (!isDate(iso)) return null;
+    var p = iso.split("-"), then = new Date(+p[0], +p[1] - 1, +p[2]), now = new Date();
+    now = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    return Math.round((now - then) / 86400000);
+  }
+  function daysText(n) { return n === 0 ? "Today" : n === 1 ? "1 day" : n + " days"; }
+
+  /* ---------- saving ---------- */
+  var queues = {}, inFlight = 0, failed = false;
+  function setSave(text, stateName) { var s = $("save"); s.textContent = text; s.dataset.state = stateName || ""; }
+  function refreshSave() {
+    if (!canSave) return;
+    if (failed) setSave("Couldn't save the last change. Check your connection and try it again.", "error");
+    else setSave(inFlight ? "Saving…" : "All changes saved");
+  }
+  function save(a) {
+    if (!db) return;
+    var k = key(a), sh = shardOf(a), value = Object.assign({}, st(a)), patch = {};
+    patch[k] = value;
+    inFlight++; refreshSave();
+    queues[sh] = (queues[sh] || Promise.resolve()).then(function () {
+      var ref = db.doc("state/" + sh);
+      var write = shardExists[sh] ? ref.update(patch) : ref.get().then(function (snap) {
+        shardExists[sh] = snap.exists;
+        return snap.exists ? ref.update(patch) : ref.set(patch);
+      });
+      return write.then(function () { shardExists[sh] = true; failed = false; }, function () { failed = true; });
+    }).then(function () { inFlight--; refreshSave(); });
+  }
+  function change(a, fields) {
+    state[key(a)] = Object.assign({}, st(a), fields);
+    save(a);
+  }
+
+  /* ---------- rendering ---------- */
+  function currentTab() { return TABS.filter(function (x) { return x.id === tab; })[0] || TABS[0]; }
+  function counts() {
+    var c = {}; TABS.forEach(function (t) { c[t.id] = 0; });
+    agents.forEach(function (a) { var s = st(a).s; TABS.forEach(function (t) { if (t.match(s)) c[t.id]++; }); });
+    return c;
+  }
+  function renderTabs() {
+    var c = counts(), nav = $("tabs"); nav.textContent = "";
+    TABS.forEach(function (t) {
+      var b = el("button", "tab"); b.type = "button"; b.setAttribute("role", "tab");
+      b.setAttribute("aria-selected", String(t.id === tab));
+      b.appendChild(el("span", "", t.label)); if (!t.dash) b.appendChild(el("span", "n", String(c[t.id])));
+      b.addEventListener("click", function () { location.hash = t.id; selectTab(t.id); });
+      nav.appendChild(b);
+    });
+  }
+  function visible() {
+    var t = currentTab(), q = query.trim().toLowerCase();
+    var rows = agents.filter(function (a) {
+      if (!t.match(st(a).s)) return false;
+      if (!q) return true;
+      return (a.n + " " + a.t + " " + a.m + " " + a.b).toLowerCase().indexOf(q) !== -1;
+    });
+    if (tab === "no-answer") {
+      // Longest since last call first. No date yet counts as the longest wait.
+      rows = rows.map(function (a, idx) { var d = st(a).d; return { a: a, k: isDate(d) ? d : "", idx: idx }; })
+        .sort(function (x, y) { return x.k === y.k ? x.idx - y.idx : (x.k < y.k ? -1 : 1); })
+        .map(function (x) { return x.a; });
+    }
+    return rows;
+  }
+  function cell(tr, cls, text) { var td = el("td", cls, text); if (text) td.title = text; tr.appendChild(td); return td; }
+  function rowFor(a, showDays, showFollow) {
+    var s = st(a), id = key(a), tr = el("tr");
+
+    var who = el("td", "pin"), name;
+    if (/^https:\/\//.test(a.p)) { name = el("a", "", a.n); name.href = a.p; name.target = "_blank"; name.rel = "noopener"; }
+    else name = el("span", "", a.n);
+    who.title = a.n; who.appendChild(name); tr.appendChild(who);
+
+    var ph = el("td", "phone");
+    if (a.c) { var link = el("a", "", a.c); link.href = "tel:" + a.c.replace(/[^\d+]/g, ""); ph.appendChild(link); }
+    tr.appendChild(ph);
+
+    var sc = el("td", "ctl");
+    var sel = el("select"); sel.id = "st-" + id; sel.setAttribute("aria-label", "Call status for " + a.n); sel.dataset.tone = TONE[s.s] || "";
+    STATUSES.forEach(function (o) { var op = el("option", "", o.label); op.value = o.v; if (o.v === s.s) op.selected = true; sel.appendChild(op); });
+    if (s.s && TONE[s.s] === undefined) { var extra = el("option", "", s.s); extra.value = s.s; extra.selected = true; sel.appendChild(extra); }
+    sel.disabled = !canSave;
+    sel.addEventListener("change", function () {
+      change(a, { s: sel.value, d: sel.value ? today() : "" });
+      var dest = TABS.filter(function (t) { return t.match(sel.value); })[0];
+      toast(a.n + " moved to " + (dest ? dest.label : "Call List"));
+      render();
+    });
+    sc.appendChild(sel); tr.appendChild(sc);
+
+    if (showFollow) {
+      var fc = el("td", "ctl");
+      var fu = el("input"); fu.type = "datetime-local"; fu.id = "fu-" + id; fu.setAttribute("aria-label", "Follow up date and time for " + a.n);
+      fu.value = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}/.test(s.f || "") ? s.f.slice(0, 16) : ""; fu.disabled = !canSave;
+      fu.addEventListener("change", function () { change(a, { f: fu.value }); });
+      fc.appendChild(fu); tr.appendChild(fc);
+    }
+
+    if (showDays) {
+      var dc = el("td", "ctl");
+      var date = el("input"); date.type = "date"; date.id = "dt-" + id; date.setAttribute("aria-label", "Status date for " + a.n);
+      date.value = isDate(s.d) ? s.d : ""; date.disabled = !canSave;
+      date.addEventListener("change", function () { change(a, { d: date.value }); render(); });
+      dc.appendChild(date); tr.appendChild(dc);
+
+      var n = daysSince(s.d), dd = el("td", "ctl");
+      var badge = el("span", "days", n === null ? "No date" : daysText(n)); if (n === null || n >= 5) badge.dataset.old = "1"; dd.appendChild(badge);
+      if (canSave && n !== 0) {
+        var again = el("button", "btn", "Called today"); again.type = "button";
+        again.addEventListener("click", function () { change(a, { d: today() }); toast("Logged a call to " + a.n + " today"); render(); });
+        dd.appendChild(again);
+      }
+      tr.appendChild(dd);
+    }
+
+    var nc = el("td", "ctl");
+    var note = el("input", "note"); note.type = "text"; note.id = "nt-" + id; note.setAttribute("aria-label", "Notes for " + a.n);
+    note.value = s.n || ""; note.title = s.n || ""; note.placeholder = "Add a note"; note.disabled = !canSave;
+    var timer = null;
+    function commit() { clearTimeout(timer); timer = null; if (note.value !== (st(a).n || "")) { change(a, { n: note.value }); note.title = note.value; } }
+    note.addEventListener("input", function () { clearTimeout(timer); timer = setTimeout(commit, 900); });
+    note.addEventListener("blur", function () { commit(); if (pendingRender) render(); });
+    note.addEventListener("keydown", function (e) { if (e.key === "Enter") note.blur(); });
+    nc.appendChild(note); tr.appendChild(nc);
+
+    cell(tr, "", a.t); cell(tr, "", a.m); cell(tr, "", a.b); cell(tr, "muted", a.e);
+    cell(tr, "num", String(a.r));
+    return tr;
+  }
+  function editing() { var e = document.activeElement; return !!(e && e.classList && e.classList.contains("note") && $("list").contains(e)); }
+  function render() {
+    renderTabs();
+    if (editing()) { pendingRender = true; return; }
+    pendingRender = false;
+    if (tab === "dashboard") { renderDash(); return; }
+    var rows = visible(), list = $("list"), t = currentTab(); list.textContent = "";
+    var sum = rows.length + (rows.length === 1 ? " agent" : " agents") + (query.trim() ? " matching “" + query.trim() + "”" : "") + " in " + t.label;
+    if (tab === "call-list") sum += ", not called yet";
+    if (tab === "no-answer" && rows.length) sum += ", longest wait first";
+    $("summary").textContent = agents.length ? sum : "";
+    if (!agents.length) return;
+    if (!rows.length) {
+      list.appendChild(el("div", "empty", query.trim() ? "No agents match that search in " + t.label + ". Try another tab." : (tab === "call-list" ? "Every agent has a call status. Nobody is left to call." : "Nobody is in " + t.label + " yet. Set an agent's call status and they show up here.")));
+      return;
+    }
+    var showDays = tab === "no-answer";
+    var showFollow = tab === "talked-to" || tab === "video-call-set" || tab === "video-call-met" || tab === "closed";
+    var wrap = el("div", "sheet"), table = el("table"), thead = el("thead"), hr = el("tr"), body = el("tbody");
+    var heads = ["Agent", "Cell", "Call status"].concat(showFollow ? ["Follow up date"] : [], showDays ? ["Status date", "Days since call"] : [], ["Notes", "Team", "Market", "Brokerage", "Email", "Reviews"]);
+    heads.forEach(function (h, i) { var th = el("th", i === 0 ? "pin" : "", h); th.scope = "col"; hr.appendChild(th); });
+    thead.appendChild(hr); table.appendChild(thead);
+    rows.slice(0, shown).forEach(function (a) { body.appendChild(rowFor(a, showDays, showFollow)); });
+    table.appendChild(body); wrap.appendChild(table); list.appendChild(wrap);
+    if (rows.length > shown) {
+      var holder = el("div"); holder.style.display = "flex"; holder.style.justifyContent = "center";
+      var more = el("button", "btn more", "Show " + Math.min(PAGE, rows.length - shown) + " more"); more.type = "button";
+      more.addEventListener("click", function () { shown += PAGE; render(); });
+      holder.appendChild(more); list.appendChild(holder);
+    }
+  }
+  function timeText(f) {
+    var m = /T(\d{2}):(\d{2})/.exec(f || ""); if (!m) return "";
+    var h = +m[1]; return (h % 12 || 12) + ":" + m[2] + (h < 12 ? " AM" : " PM");
+  }
+  function dateText(f) { var p = f.slice(0, 10).split("-"); return (+p[1]) + "/" + (+p[2]); }
+  function dashList(title, rows, emptyText, showDate) {
+    var card = el("section", "card");
+    var head = el("h2", "", title); head.appendChild(el("span", "n", String(rows.length))); card.appendChild(head);
+    if (!rows.length) { card.appendChild(el("p", "none", emptyText)); return card; }
+    rows.forEach(function (a) {
+      var s = st(a), item = el("div", "item");
+      item.appendChild(el("div", "when", (showDate ? dateText(s.f) + " " : "") + timeText(s.f)));
+      var mid = el("div", "what"), name;
+      if (/^https:\/\//.test(a.p)) { name = el("a", "nm", a.n); name.href = a.p; name.target = "_blank"; name.rel = "noopener"; }
+      else name = el("span", "nm", a.n);
+      mid.appendChild(name);
+      mid.appendChild(el("div", "sub", s.s + (a.t ? " · " + a.t : "")));
+      if (s.n) mid.appendChild(el("div", "sub", s.n));
+      item.appendChild(mid);
+      if (a.c) { var ph = el("a", "tel", a.c); ph.href = "tel:" + a.c.replace(/[^\d+]/g, ""); item.appendChild(ph); }
+      card.appendChild(item);
+    });
+    return card;
+  }
+  function renderDash() {
+    var list = $("list"); list.textContent = "";
+    var d = new Date();
+    $("summary").textContent = agents.length ? d.toLocaleDateString(undefined, { weekday: "long", month: "long", day: "numeric" }) : "";
+    if (!agents.length) return;
+    var td = today(), FOLLOW = { "Talked To": 1, "Video Call Met": 1, "Closed Won": 1, "Closed Lost": 1 };
+    var called = 0, meetings = [], follows = [], overdue = [];
+    agents.forEach(function (a) {
+      var s = st(a), fd = /^\d{4}-\d{2}-\d{2}/.test(s.f || "") ? s.f.slice(0, 10) : "";
+      if (s.d === td) called++;
+      if (!fd) return;
+      var meeting = s.s === "Video Call Set";
+      if (!meeting && !FOLLOW[s.s]) return;
+      if (fd === td) (meeting ? meetings : follows).push(a);
+      else if (fd < td) overdue.push(a);
+    });
+    var byTime = function (x, y) { return st(x).f < st(y).f ? -1 : st(x).f > st(y).f ? 1 : 0; };
+    meetings.sort(byTime); follows.sort(byTime); overdue.sort(byTime);
+
+    var dash = el("div", "dash");
+    var goal = el("section", "card goal");
+    goal.appendChild(el("h2", "", "Calls today"));
+    var big = el("div", "big"); big.appendChild(el("span", "", String(called))); big.appendChild(el("small", "", " of " + GOAL)); goal.appendChild(big);
+    var bar = el("div", "bar"), fill = el("div", "fill"); fill.style.width = Math.min(100, Math.round(called / GOAL * 100)) + "%"; bar.appendChild(fill); goal.appendChild(bar);
+    goal.appendChild(el("p", "none", called >= GOAL ? "Goal hit. " + (called - GOAL) + " over." : (GOAL - called) + " to go. A call counts when you set a status or tap Called today."));
+    var go = el("button", "btn", "Open Call List"); go.type = "button"; go.style.marginLeft = "0";
+    go.addEventListener("click", function () { location.hash = "call-list"; selectTab("call-list"); });
+    goal.appendChild(go);
+    dash.appendChild(goal);
+    dash.appendChild(dashList("Meetings today", meetings, "No video calls set for today. Agents in Video Call Set show here on their follow up date."));
+    dash.appendChild(dashList("Follow ups today", follows, "No follow ups due today."));
+    if (overdue.length) dash.appendChild(dashList("Overdue", overdue, "", true));
+    list.appendChild(dash);
+  }
+  function selectTab(id) {
+    if (!TABS.some(function (t) { return t.id === id; })) id = "dashboard";
+    if (id !== tab) shown = PAGE;
+    tab = id; render();
+  }
+  var toastTimer = null;
+  function toast(msg) { var t = $("toast"); t.textContent = msg; t.dataset.on = "1"; clearTimeout(toastTimer); toastTimer = setTimeout(function () { t.dataset.on = "0"; }, 2400); }
+  function notice(msg) { var n = $("notice"); n.textContent = msg; n.hidden = !msg; }
+
+  /* ---------- start ---------- */
+  $("search").addEventListener("input", function (e) { query = e.target.value; shown = PAGE; render(); });
+  window.addEventListener("hashchange", function () { selectTab(location.hash.slice(1)); });
+  tab = TABS.some(function (t) { return t.id === location.hash.slice(1); }) ? location.hash.slice(1) : "dashboard";
+  renderTabs();
+
+  fetch("agents.json").then(function (r) { if (!r.ok) throw new Error("load"); return r.json(); }).then(function (data) {
+    agents = Array.isArray(data) ? data : [];
+    render();
+  }).catch(function () { notice("The agent list didn't load. Refresh the page to try again."); setSave(""); });
+
+  function applyShard(doc) {
+    var body = doc.exists ? (doc.data() || {}) : {};
+    shardExists[doc.id] = !!doc.exists;
+    Object.keys(body).forEach(function (k) {
+      var v = body[k];
+      if (v && typeof v === "object") state[k] = { s: typeof v.s === "string" ? v.s : "", d: typeof v.d === "string" ? v.d : "", n: typeof v.n === "string" ? v.n : "", f: typeof v.f === "string" ? v.f : "" };
+    });
+  }
+  var claudeReady = (window.claude && typeof window.claude.use === "function") ? window.claude.use("db") : Promise.resolve(null);
+  Promise.resolve(claudeReady).then(function (ns) {
+    db = ns;
+    if (!db) { setSave("View only"); notice("Statuses and notes can't be loaded or saved in this view. Open the page signed in to Claude to work your list."); return; }
+    var slow = setTimeout(function () { notice("Still reaching your saved statuses. What you see may be out of date."); }, 10000);
+    db.collection("state").onSnapshot(function (snap) {
+      snap.docs.forEach(applyShard);
+      if (!snap.metadata.fromCache) { clearTimeout(slow); notice(""); }
+      if (!canSave) { canSave = true; }
+      refreshSave(); render();
+    }, function () {
+      clearTimeout(slow); canSave = false; setSave("View only", "error");
+      notice("Your saved statuses can't be reached right now, so changes are turned off. Refresh the page to try again."); render();
+    });
+  }).catch(function () { setSave("View only"); });
+})();
+</script>
+</body>
+</html>
